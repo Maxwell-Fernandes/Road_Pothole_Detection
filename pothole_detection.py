@@ -1,82 +1,75 @@
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
+from tkinter import Tk, filedialog
 
-# Load the image
-image = cv2.imread('pothole_image.jpg')
-if image is None:
-    print("Error: Image not found or unable to load.")
+def choose_image():
+    """ Open a file dialog to select an image """
+    Tk().withdraw()  # Hide the main Tkinter window
+    file_path = filedialog.askopenfilename(title="Select an Image",
+                                           filetypes=[("Image Files", "*.jpg;*.png;*.jpeg")])
+    return file_path
+
+def preprocess_image(image):
+    """ Convert to grayscale, apply histogram equalization & blur """
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.equalizeHist(gray)  # Improve contrast
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    return blurred
+
+def detect_edges(image):
+    """ Apply edge detection """
+    edges = cv2.Canny(image, 50, 150)
+    return edges
+
+def segment_potholes(image):
+    """ Use thresholding and morphological operations to detect potholes """
+    _, binary = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    # Morphological operations to remove small noise
+    kernel = np.ones((5, 5), np.uint8)
+    morph = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+    return morph
+
+def find_potholes(image, original):
+    """ Detect potholes using contours and filtering """
+    contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    potholes = []
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if 300 < area < 10000:  # Filter out very small or large objects
+            x, y, w, h = cv2.boundingRect(contour)
+            aspect_ratio = float(w) / h
+
+            # Ensure the detected region is not too elongated (to remove cracks)
+            if 0.3 < aspect_ratio < 2.5:
+                potholes.append(contour)
+
+    result = original.copy()
+    cv2.drawContours(result, potholes, -1, (0, 255, 0), 2)
+
+    return result, potholes
+
+# Select an image
+image_path = choose_image()
+if not image_path:
+    print("No image selected. Exiting...")
     exit()
 
-# Convert to grayscale
-gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-cv2.imshow('Grayscale Image', gray_image)
+# Load image
+image = cv2.imread(image_path)
 
-# Apply median filter for noise reduction
-denoised_image = cv2.medianBlur(gray_image, 9)
-cv2.imshow('Denoised Image', denoised_image)
+# Apply processing pipeline
+preprocessed = preprocess_image(image)
+edges = detect_edges(preprocessed)
+segmented = segment_potholes(preprocessed)
+final_result, potholes = find_potholes(segmented, image)
 
-# Apply Otsu's thresholding
-_, binary_image = cv2.threshold(denoised_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-cv2.imshow('Binary Image', binary_image)
-
-# Apply morphological closing
-kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
-closed_image = cv2.morphologyEx(binary_image, cv2.MORPH_CLOSE, kernel)
-cv2.imshow('Closed Image', closed_image)
-
-# Find contours
-contours, _ = cv2.findContours(closed_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-# Extract candidate regions
-candidate_regions = []
-for contour in contours:
-    area = cv2.contourArea(contour)
-    perimeter = cv2.arcLength(contour, True)
-
-    # Check if area is zero to avoid division by zero
-    if area == 0:
-        continue
-
-    compactness = (perimeter ** 2) / (4 * np.pi * area)
-
-    if area > 512 and compactness < 0.05:  # Thresholds for size and compactness
-        candidate_regions.append(contour)
-
-# Refine candidate regions
-refined_regions = []
-for contour in candidate_regions:
-    hull = cv2.convexHull(contour)
-    refined_regions.append(hull)
-
-# Calculate features and classify
-def calculate_ohi(roi, background_region):
-    hist_roi = cv2.calcHist([roi], [0], None, [256], [0, 256])
-    hist_background = cv2.calcHist([background_region], [0], None, [256], [0, 256])
-    ohi = cv2.compareHist(hist_roi, hist_background, cv2.HISTCMP_INTERSECT)
-    return ohi
-
-# Assume a background region for comparison
-background_region = gray_image[0:100, 0:100]
-cv2.imshow('Background Region', background_region)
-
-potholes = []
-for contour in refined_regions:
-    x, y, w, h = cv2.boundingRect(contour)
-    roi = gray_image[y:y+h, x:x+w]
-
-    std_dev = np.std(roi)
-    ohi = calculate_ohi(roi, background_region)
-
-    if std_dev < 10 and ohi > 0.8:  # Thresholds for standard deviation and OHI
-        potholes.append(contour)
-
-# Draw bounding boxes around detected potholes
-output_image = image.copy()
-for contour in potholes:
-    x, y, w, h = cv2.boundingRect(contour)
-    cv2.rectangle(output_image, (x, y), (x+w, y+h), (0, 255, 0), 2)
-
-# Display the result
-cv2.imshow('Detected Potholes', output_image)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+# Show results using Matplotlib (Fixes cv2.imshow issue)
+plt.figure(figsize=(10, 6))
+plt.imshow(cv2.cvtColor(final_result, cv2.COLOR_BGR2RGB))
+plt.axis("off")  # Hide axis
+plt.title(f"Detected Potholes ({len(potholes)} found)")
+plt.show()
