@@ -27,7 +27,7 @@ def preprocess_image(image):
     enhanced = clahe.apply(gray)
 
     # Apply Gaussian blur to reduce noise
-    blurred = cv2.GaussianBlur(enhanced, (5, 5), 0)
+    blurred = cv2.GaussianBlur(enhanced, (3, 3), 0)
 
     return blurred, gray, enhanced
 
@@ -55,7 +55,7 @@ def segment_potholes(image):
     # Apply adaptive thresholding
     adaptive_thresh = cv2.adaptiveThreshold(
         image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV, 11, 2
+        cv2.THRESH_BINARY_INV, 9, 3
     )
 
     # Also apply Otsu's thresholding as a comparison
@@ -103,7 +103,7 @@ def find_potholes(image, original):
 
         # Only consider objects that are between 0.05% and 5% of the image area
         # (these thresholds can be adjusted based on your specific needs)
-        if 0.05 < relative_area < 5:
+        if 0.5 < relative_area < 30:
             x, y, w, h = cv2.boundingRect(contour)
             aspect_ratio = float(w) / h
 
