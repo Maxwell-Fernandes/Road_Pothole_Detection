@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Detection Result</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Detection Result</h1>
+        <div class="images">
+            <div class="image-block">
+                <h3>Original Image</h3>
+                <img src="{{ url_for('uploaded_file', filename=original) }}" alt="Original Image">
+            </div>
+            <div class="image-block">
+                <h3>Processed Image</h3>
+                <img src="{{ url_for('uploaded_file', filename=result) }}" alt="Result Image">
+            </div>
+        </div>
+        <a class="retry" href="{{ url_for('index') }}">Try Another</a>
+    </div>
+</body>
+</html>
